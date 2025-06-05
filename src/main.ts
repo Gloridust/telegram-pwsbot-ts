@@ -1,13 +1,16 @@
 import { bot, initializeBotInfo } from './core/bot';
 import { configManager } from './core/config';
 import { CommandHandler } from './handlers/CommandHandler';
+import { SubmissionHandler } from './handlers/SubmissionHandler';
 import type { Message, CallbackQuery } from 'node-telegram-bot-api';
 
 class TelegramPWSBot {
   private commandHandler: CommandHandler;
+  private submissionHandler: SubmissionHandler;
 
   constructor() {
     this.commandHandler = new CommandHandler();
+    this.submissionHandler = new SubmissionHandler();
     this.setupEventListeners();
   }
 
@@ -46,9 +49,26 @@ class TelegramPWSBot {
 
   private async handleMessage(message: Message): Promise<void> {
     try {
+      console.log('📨 收到消息:', {
+        messageId: message.message_id,
+        fromId: message.from?.id,
+        chatType: message.chat.type,
+        text: message.text?.substring(0, 50) + (message.text && message.text.length > 50 ? '...' : ''),
+        hasPhoto: !!message.photo,
+        hasVideo: !!message.video
+      });
+      
+      // 首先尝试命令处理器（处理以 / 开头的命令）
+      console.log('🔄 尝试命令处理器...');
       await this.commandHandler.process(message);
+      
+      // 然后尝试投稿处理器（处理私聊中的非命令消息）
+      console.log('🔄 尝试投稿处理器...');
+      await this.submissionHandler.process(message);
+      
+      console.log('✅ 消息处理完成');
     } catch (error) {
-      console.error('处理消息失败:', error);
+      console.error('❌ 处理消息失败:', error);
     }
   }
 
