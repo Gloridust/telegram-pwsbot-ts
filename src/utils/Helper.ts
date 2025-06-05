@@ -19,7 +19,13 @@ export class Helper {
   // 更新配置文件
   public static async updateConfig(updates: Record<string, string | number>): Promise<void> {
     try {
-      await updateDotenv(updates);
+      // 将所有值转换为字符串，因为 updateDotenv 只接受字符串
+      const stringUpdates: Record<string, string> = {};
+      for (const [key, value] of Object.entries(updates)) {
+        stringUpdates[key] = String(value);
+      }
+      
+      await updateDotenv(stringUpdates);
       console.log('配置已更新:', updates);
     } catch (error) {
       console.error('更新配置失败:', error);

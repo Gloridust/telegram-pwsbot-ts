@@ -12,7 +12,13 @@ export class ConfigManager {
       throw new Error('不存在 .env 配置，请确保将项目目录下具有 .env 配置文件！(配置文件模板：env.example)');
     }
 
-    this.config = result.parsed as BotConfig;
+    // 验证必需的配置项
+    const parsed = result.parsed;
+    if (!parsed['Token'] || !parsed['Admin'] || !parsed['Channel']) {
+      throw new Error('缺少必需的配置项：Token、Admin 或 Channel');
+    }
+
+    this.config = parsed as unknown as BotConfig;
     this.validateConfig();
     this.setupTimezone();
   }

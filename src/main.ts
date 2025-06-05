@@ -89,7 +89,7 @@ class TelegramPWSBot {
       console.log('✅ 机器人启动成功，正在监听消息...');
       
       // 测试环境自动退出
-      if (process.env.BOT_ENV === 'test') {
+      if (process.env['BOT_ENV'] === 'test') {
         setTimeout(() => {
           console.log('测试环境，3秒后自动退出...');
           process.exit(0);

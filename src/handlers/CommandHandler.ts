@@ -3,20 +3,10 @@ import { MessageHandler } from './MessageHandler';
 import { bot } from '../core/bot';
 import { configManager } from '../core/config';
 import { Helper } from '../utils/Helper';
-import { SubmissionModel } from '../models/Submission';
-import { BlackListModel } from '../models/BlackList';
-import { ReplySessionModel } from '../models/ReplySession';
 
 export class CommandHandler extends MessageHandler {
-  private submissionModel: SubmissionModel;
-  private blackListModel: BlackListModel;
-  private replySessionModel: ReplySessionModel;
-
   constructor() {
     super();
-    this.submissionModel = new SubmissionModel();
-    this.blackListModel = new BlackListModel();
-    this.replySessionModel = new ReplySessionModel();
   }
 
   public async process(message: Message): Promise<void> {
@@ -52,43 +42,43 @@ export class CommandHandler extends MessageHandler {
 
         case 'ok':
           if (isGroup && this.isInReviewGroup(chat.id)) {
-            await this.handleApprove(message, args);
+            await this.handleApprove(message, args || []);
           }
           break;
 
         case 'no':
           if (isGroup && this.isInReviewGroup(chat.id)) {
-            await this.handleReject(message, args);
+            await this.handleReject(message, args || []);
           }
           break;
 
         case 're':
           if (isGroup && this.isInReviewGroup(chat.id)) {
-            await this.handleReply(message, args);
+            await this.handleReply(message, args || []);
           }
           break;
 
         case 'ban':
           if (isGroup && this.isInReviewGroup(chat.id)) {
-            await this.handleBan(message, args);
+            await this.handleBan(message, args || []);
           }
           break;
 
         case 'unban':
           if (isGroup && this.isInReviewGroup(chat.id)) {
-            await this.handleUnban(message, args);
+            await this.handleUnban(message, args || []);
           }
           break;
 
         case 'unre':
           if (isGroup && this.isInReviewGroup(chat.id)) {
-            await this.handleEndReply(message, args);
+            await this.handleEndReply(message, args || []);
           }
           break;
 
         case 'echo':
           if (isGroup && this.isInReviewGroup(chat.id)) {
-            await this.handleEcho(message, args);
+            await this.handleEcho(message, args || []);
           }
           break;
 
@@ -180,12 +170,12 @@ export class CommandHandler extends MessageHandler {
     await bot.sendMessage(message.chat.id, `🚫 用户已被拉黑${reason ? `\n理由: ${reason}` : ''}`);
   }
 
-  private async handleUnban(message: Message, args: string[]): Promise<void> {
+  private async handleUnban(message: Message, _args: string[]): Promise<void> {
     // 实现解除拉黑逻辑
     await bot.sendMessage(message.chat.id, '✅ 用户已解除拉黑');
   }
 
-  private async handleEndReply(message: Message, args: string[]): Promise<void> {
+  private async handleEndReply(message: Message, _args: string[]): Promise<void> {
     // 实现结束对话逻辑
     await bot.sendMessage(message.chat.id, '✅ 对话状态已结束');
   }

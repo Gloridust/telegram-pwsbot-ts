@@ -23,7 +23,7 @@ export const initializeBotInfo = async (): Promise<void> => {
     const info = await bot.getMe();
     configManager.updateConfig({
       BotID: info.id,
-      BotUserName: info.username
+      BotUserName: info.username || ''
     });
     console.log(`机器人初始化成功: @${info.username} (ID: ${info.id})`);
   } catch (error) {

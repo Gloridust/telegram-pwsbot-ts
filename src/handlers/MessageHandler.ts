@@ -7,17 +7,30 @@ export abstract class MessageHandler {
     const user = message.from!;
     const chat = message.chat;
     
-    return {
+    const processed: ProcessedMessage = {
       message,
       user,
       chat,
       isPrivate: chat.type === 'private',
       isGroup: chat.type === 'group' || chat.type === 'supergroup',
-      isChannel: chat.type === 'channel',
-      text: message.text,
-      command: this.extractCommand(message.text),
-      args: this.extractArgs(message.text)
+      isChannel: chat.type === 'channel'
     };
+
+    if (message.text) {
+      processed.text = message.text;
+    }
+
+    const command = this.extractCommand(message.text);
+    if (command) {
+      processed.command = command;
+    }
+
+    const args = this.extractArgs(message.text);
+    if (args) {
+      processed.args = args;
+    }
+
+    return processed;
   }
 
   private extractCommand(text?: string): string | undefined {

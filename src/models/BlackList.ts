@@ -1,17 +1,26 @@
 import { Database } from './Database';
-import { UserData } from '../types';
 
-export class BlackListModel extends Database<{ userId: number; reason?: string; blockedAt: number }> {
+interface BlackListData {
+  userId: number;
+  reason?: string;
+  blockedAt: number;
+}
+
+export class BlackListModel extends Database<BlackListData> {
   constructor() {
     super('blacklist');
   }
 
-  public async addToBlacklist(userId: number, reason?: string): Promise<void> {
-    const data = {
+  public async blockUser(userId: number, reason?: string): Promise<void> {
+    const data: BlackListData = {
       userId,
-      reason,
       blockedAt: Date.now()
     };
+    
+    if (reason) {
+      data.reason = reason;
+    }
+    
     await this.add(userId.toString(), data);
   }
 
