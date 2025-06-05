@@ -1,0 +1,38 @@
+{
+  "name": "telegram-pwsbot-ts",
+  "version": "2.0.0",
+  "description": "一个基于TypeScript优化的Telegram投稿机器人",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && node dist/main.js",
+    "dev": "tsx watch src/main.ts",
+    "clean": "rimraf dist",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "type-check": "tsc --noEmit",
+    "test": "export BOT_ENV=test && npm run start"
+  },
+  "keywords": ["telegram", "bot", "typescript", "submission"],
+  "author": "axiref",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "lowdb": "^7.0.1",
+    "node-telegram-bot-api": "^0.64.0",
+    "update-dotenv": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/node-telegram-bot-api": "^0.64.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "eslint": "^8.54.0",
+    "rimraf": "^5.0.5",
+    "tsx": "^4.6.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+} 

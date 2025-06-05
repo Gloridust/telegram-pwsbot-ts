@@ -1,0 +1,20 @@
+{
+  "welcome": "欢迎使用投稿机器人！\n\n📝 如何投稿：\n直接发送您要投稿的内容给我，支持文字、图片、视频等多种格式。\n\n⚡ 功能特点：\n• 支持多图投稿\n• 支持匿名投稿\n• 支持稿件评论\n• 夜间静音推送\n\n📋 投稿状态：\n投稿后会转发到审稿群，管理员审核后会通知您结果。\n\n如有问题请联系管理员。",
+  "version": "🤖 PWS Telegram 投稿机器人\n📦 版本: 2.0.0-TypeScript\n🛠️ 基于 TypeScript 重构优化\n📄 许可证: MIT\n👤 作者: axiref",
+  "group_set_success": "✅ 审稿群设置成功！",
+  "submission_approved": "✅ 您的投稿已通过审核",
+  "submission_rejected": "❌ 您的投稿被拒绝",
+  "submission_received": "📝 收到您的投稿，正在转发给管理员审核...",
+  "admin_help": "📋 审稿群命令帮助：\n\n/ok [评论] - 通过稿件，可附加评论\n/no <理由> - 拒绝稿件，需提供理由\n/re <内容> - 与用户对话回复\n/ban [理由] - 拉黑用户\n/unban - 解除拉黑\n/unre - 结束对话状态\n/echo <内容> - 单次回复用户\n/pwshelp - 显示此帮助信息\n\n💡 使用方法：回复要处理的稿件消息并输入相应命令",
+  "user_blocked": "🚫 您已被拉黑，无法使用此机器人",
+  "night_mode": "🌙 夜间静音模式已开启，您的投稿将在早上推送",
+  "error_occurred": "❌ 处理时发生错误，请稍后重试",
+  "no_permission": "❌ 您没有权限执行此操作",
+  "invalid_command": "❌ 无效的命令格式",
+  "reply_sent": "💬 回复已发送",
+  "user_banned": "🚫 用户已被拉黑",
+  "user_unbanned": "✅ 用户已解除拉黑",
+  "session_ended": "✅ 对话状态已结束",
+  "provide_reason": "❌ 请提供理由",
+  "provide_content": "❌ 请提供内容"
+} 
