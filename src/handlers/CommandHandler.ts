@@ -3,10 +3,14 @@ import { MessageHandler } from './MessageHandler';
 import { bot } from '../core/bot';
 import { configManager } from '../core/config';
 import { Helper } from '../utils/Helper';
+import { SubmissionModel } from '../models/Submission';
 
 export class CommandHandler extends MessageHandler {
+  private submissionModel: SubmissionModel;
+
   constructor() {
     super();
+    this.submissionModel = new SubmissionModel();
   }
 
   public async process(message: Message): Promise<void> {
@@ -137,20 +141,141 @@ export class CommandHandler extends MessageHandler {
   }
 
   private async handleApprove(message: Message, args: string[]): Promise<void> {
-    // 实现审核通过逻辑
-    const comment = args.join(' ');
-    await bot.sendMessage(message.chat.id, `✅ 稿件已通过${comment ? `\n评论: ${comment}` : ''}`);
+    try {
+      // 检查是否是回复消息
+      if (!message.reply_to_message) {
+        await bot.sendMessage(message.chat.id, '❌ 请回复要通过的投稿消息使用此命令');
+        return;
+      }
+
+      const comment = args.join(' ');
+      
+      // 尝试从回复的消息中提取投稿ID
+      const replyText = message.reply_to_message.text || message.reply_to_message.caption || '';
+      const submissionIdMatch = replyText.match(/📝 投稿ID: ([^\s\n]+)/);
+      
+      if (!submissionIdMatch) {
+        await bot.sendMessage(message.chat.id, '❌ 无法找到投稿ID，请确保回复的是投稿消息');
+        return;
+      }
+
+      const submissionId = submissionIdMatch[1];
+      
+      // 从数据库获取投稿信息
+      const submission = await this.submissionModel.getSubmission(submissionId);
+      if (!submission) {
+        await bot.sendMessage(message.chat.id, '❌ 找不到对应的投稿记录');
+        return;
+      }
+
+      if (submission.status !== 'pending') {
+        await bot.sendMessage(message.chat.id, `❌ 此投稿已经被处理过了，状态：${submission.status}`);
+        return;
+      }
+
+      // 发送到频道
+      const channelId = configManager.channel;
+      if (!channelId) {
+        await bot.sendMessage(message.chat.id, '❌ 未配置发布频道，请检查配置');
+        return;
+      }
+
+      let channelMessageId: number | undefined;
+
+      try {
+        // 转发原始消息到频道
+        const forwardResult = await bot.forwardMessage(channelId, submission.userId.toString(), submission.messageId);
+        channelMessageId = forwardResult.message_id;
+        
+        // 如果有评论，发送评论
+        if (comment) {
+          await bot.sendMessage(channelId, `📝 编辑评论: ${comment}`, {
+            reply_to_message_id: channelMessageId
+          });
+        }
+      } catch (channelError) {
+        console.error('发送到频道失败:', channelError);
+        await bot.sendMessage(message.chat.id, '❌ 发送到频道失败，请检查机器人是否有频道发送权限');
+        return;
+      }
+
+      // 更新投稿状态
+      await this.submissionModel.updateSubmissionStatus(submissionId, 'approved', comment);
+
+      // 通知审稿群
+      await bot.sendMessage(message.chat.id, `✅ 稿件已通过并发送到频道${comment ? `\n评论: ${comment}` : ''}`);
+
+      // 通知投稿用户
+      try {
+        const userNotification = `✅ 您的投稿已通过审核并发布！\n\n📝 投稿ID: ${submissionId}${comment ? `\n💬 编辑评论: ${comment}` : ''}`;
+        await bot.sendMessage(submission.userId, userNotification);
+      } catch (userError) {
+        console.error('通知用户失败:', userError);
+        await bot.sendMessage(message.chat.id, '⚠️ 投稿已发布，但通知用户失败（用户可能已阻止机器人）');
+      }
+
+    } catch (error) {
+      console.error('处理审核通过时出错:', error);
+      await bot.sendMessage(message.chat.id, '❌ 处理审核时发生错误，请稍后重试');
+    }
   }
 
   private async handleReject(message: Message, args: string[]): Promise<void> {
-    // 实现审核拒绝逻辑
-    const reason = args.join(' ');
-    if (!reason) {
-      await bot.sendMessage(message.chat.id, '❌ 请提供拒绝理由');
-      return;
+    try {
+      // 检查是否是回复消息
+      if (!message.reply_to_message) {
+        await bot.sendMessage(message.chat.id, '❌ 请回复要拒绝的投稿消息使用此命令');
+        return;
+      }
+
+      const reason = args.join(' ');
+      if (!reason) {
+        await bot.sendMessage(message.chat.id, '❌ 请提供拒绝理由');
+        return;
+      }
+
+      // 尝试从回复的消息中提取投稿ID
+      const replyText = message.reply_to_message.text || message.reply_to_message.caption || '';
+      const submissionIdMatch = replyText.match(/📝 投稿ID: ([^\s\n]+)/);
+      
+      if (!submissionIdMatch) {
+        await bot.sendMessage(message.chat.id, '❌ 无法找到投稿ID，请确保回复的是投稿消息');
+        return;
+      }
+
+      const submissionId = submissionIdMatch[1];
+      
+      // 从数据库获取投稿信息
+      const submission = await this.submissionModel.getSubmission(submissionId);
+      if (!submission) {
+        await bot.sendMessage(message.chat.id, '❌ 找不到对应的投稿记录');
+        return;
+      }
+
+      if (submission.status !== 'pending') {
+        await bot.sendMessage(message.chat.id, `❌ 此投稿已经被处理过了，状态：${submission.status}`);
+        return;
+      }
+
+      // 更新投稿状态
+      await this.submissionModel.updateSubmissionStatus(submissionId, 'rejected', undefined, reason);
+
+      // 通知审稿群
+      await bot.sendMessage(message.chat.id, `❌ 稿件已拒绝\n理由: ${reason}`);
+
+      // 通知投稿用户
+      try {
+        const userNotification = `❌ 很抱歉，您的投稿未通过审核\n\n📝 投稿ID: ${submissionId}\n📋 拒绝理由: ${reason}\n\n您可以根据反馈意见修改后重新投稿。`;
+        await bot.sendMessage(submission.userId.toString(), userNotification);
+      } catch (userError) {
+        console.error('通知用户失败:', userError);
+        await bot.sendMessage(message.chat.id, '⚠️ 投稿已拒绝，但通知用户失败（用户可能已阻止机器人）');
+      }
+
+    } catch (error) {
+      console.error('处理审核拒绝时出错:', error);
+      await bot.sendMessage(message.chat.id, '❌ 处理审核时发生错误，请稍后重试');
     }
-    
-    await bot.sendMessage(message.chat.id, `❌ 稿件已拒绝\n理由: ${reason}`);
   }
 
   private async handleReply(message: Message, args: string[]): Promise<void> {
