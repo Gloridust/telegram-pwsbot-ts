@@ -1,19 +1,23 @@
 import type { Message } from 'node-telegram-bot-api';
 import { MessageHandler } from './MessageHandler';
-import { bot } from '../core/bot';
+import { bot, callbackVars } from '../core/bot';
 import { configManager } from '../core/config';
 import { Helper } from '../utils/Helper';
 import { SubmissionModel } from '../models/Submission';
 import { BlackListModel } from '../models/BlackList';
+import { UserStateManager } from '../utils/UserStateManager';
+import { PendingSubmission } from '../types';
 
 export class SubmissionHandler extends MessageHandler {
   private submissionModel: SubmissionModel;
   private blackListModel: BlackListModel;
+  private userStateManager: UserStateManager;
 
   constructor() {
     super();
     this.submissionModel = new SubmissionModel();
     this.blackListModel = new BlackListModel();
+    this.userStateManager = new UserStateManager();
   }
 
   public async process(message: Message): Promise<void> {
@@ -54,55 +58,45 @@ export class SubmissionHandler extends MessageHandler {
         return;
       }
 
-      // 创建投稿
-      const submissionId = Helper.generateId();
-      
-      // 安全地构建用户显示名称参数
-      const userInfo: { username?: string; first_name?: string; last_name?: string } = {
-        first_name: user.first_name
-      };
-      
-      if (user.username) {
-        userInfo.username = user.username;
-      }
-      
-      if (user.last_name) {
-        userInfo.last_name = user.last_name;
-      }
-      
-      const userDisplayName = Helper.getUserDisplayName(userInfo);
-      
-      const submission = {
-        id: submissionId,
+      // 创建待确认的投稿
+      const pendingSubmission: PendingSubmission = {
         userId: user.id,
-        userName: userDisplayName,
         messageId: message.message_id,
         content: this.extractContent(message),
         timestamp: Date.now(),
-        status: 'pending' as const
+        originalMessage: message
       };
 
-      // 只有在有媒体组时才添加 mediaGroup 属性
-      const mediaGroup = this.extractMediaGroup(message);
-      if (mediaGroup) {
-        (submission as any).mediaGroup = mediaGroup;
-      }
-
-      await this.submissionModel.createSubmission(submission);
+      // 设置用户状态为等待确认
+      console.log('🔄 设置用户状态:', { userId: user.id, state: 'pending_submission' });
+      await this.userStateManager.setUserState(user.id, 'pending_submission', pendingSubmission);
+      
+      // 验证状态是否正确保存
+      const savedState = await this.userStateManager.getUserState(user.id);
+      console.log('✅ 用户状态已保存:', { userId: user.id, state: savedState?.state, hasData: !!savedState?.data });
 
       // 发送确认消息给用户
-      await bot.sendMessage(chat.id, `
-✅ 投稿已收到！
+      const confirmationText = `📋 投稿内容预览：
 
-📝 投稿ID: ${submissionId}
-📅 提交时间: ${Helper.formatTimestamp(submission.timestamp)}
-⏳ 状态: 待审核
+${pendingSubmission.content}
 
-您的投稿已转发给管理员审核，请耐心等待审核结果。
-      `.trim());
+请确认是否提交此投稿：`;
 
-      // 转发到审稿群
-      await this.forwardToReviewGroup(message, submission);
+      const keyboard = [
+        [
+          { text: '✅ 确认投稿', callback_data: callbackVars.SUB_CONFIRM },
+          { text: '✏️ 重新编辑', callback_data: callbackVars.SUB_EDIT }
+        ],
+        [
+          { text: '❌ 取消', callback_data: callbackVars.SUB_CANCEL }
+        ]
+      ];
+
+      await bot.sendMessage(chat.id, confirmationText, {
+        reply_markup: {
+          inline_keyboard: keyboard
+        }
+      });
 
     } catch (error) {
       console.error('处理投稿时出错:', error);

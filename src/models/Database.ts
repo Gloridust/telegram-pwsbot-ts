@@ -52,6 +52,8 @@ export class Database<T = any> {
 
   public async get(id: string): Promise<T | null> {
     await this.ensureInitialized();
+    // 重新读取数据以确保获取最新状态
+    await this.db.read();
     const table = this.db.data![this.tableName] || [];
     const item = table.find(item => item.id === id);
     return item ? item.data : null;

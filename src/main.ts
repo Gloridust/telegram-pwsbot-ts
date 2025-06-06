@@ -2,15 +2,18 @@ import { bot, initializeBotInfo } from './core/bot';
 import { configManager } from './core/config';
 import { CommandHandler } from './handlers/CommandHandler';
 import { SubmissionHandler } from './handlers/SubmissionHandler';
+import { CallbackHandler } from './handlers/CallbackHandler';
 import type { Message, CallbackQuery } from 'node-telegram-bot-api';
 
 class TelegramPWSBot {
   private commandHandler: CommandHandler;
   private submissionHandler: SubmissionHandler;
+  private callbackHandler: CallbackHandler;
 
   constructor() {
     this.commandHandler = new CommandHandler();
     this.submissionHandler = new SubmissionHandler();
+    this.callbackHandler = new CallbackHandler();
     this.setupEventListeners();
   }
 
@@ -58,11 +61,18 @@ class TelegramPWSBot {
         hasVideo: !!message.video
       });
       
-      // 首先尝试命令处理器（处理以 / 开头的命令）
+      // 首先检查是否是回调处理器需要处理的评论输入
+      const commentHandled = await this.callbackHandler.handleCommentInput(message);
+      if (commentHandled) {
+        console.log('✅ 评论输入处理完成');
+        return;
+      }
+      
+      // 然后尝试命令处理器（处理以 / 开头的命令）
       console.log('🔄 尝试命令处理器...');
       await this.commandHandler.process(message);
       
-      // 然后尝试投稿处理器（处理私聊中的非命令消息）
+      // 最后尝试投稿处理器（处理私聊中的非命令消息）
       console.log('🔄 尝试投稿处理器...');
       await this.submissionHandler.process(message);
       
@@ -74,10 +84,18 @@ class TelegramPWSBot {
 
   private async handleCallbackQuery(query: CallbackQuery): Promise<void> {
     try {
-      // 这里可以添加回调查询处理逻辑
-      console.log('收到回调查询:', query.data);
+      console.log('📞 收到回调查询:', {
+        queryId: query.id,
+        fromId: query.from?.id,
+        data: query.data,
+        messageId: query.message?.message_id
+      });
+      
+      await this.callbackHandler.process(query);
+      
+      console.log('✅ 回调查询处理完成');
     } catch (error) {
-      console.error('处理回调查询失败:', error);
+      console.error('❌ 处理回调查询失败:', error);
     }
   }
 

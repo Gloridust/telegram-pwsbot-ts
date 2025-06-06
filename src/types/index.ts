@@ -47,6 +47,13 @@ export interface CallbackVars {
   SUB_ANY: string;
   SUB_REAL: string;
   SUB_CANCEL: string;
+  SUB_CONFIRM: string;
+  SUB_EDIT: string;
+  APPROVE: string;
+  APPROVE_WITH_COMMENT: string;
+  REJECT: string;
+  BAN_USER: string;
+  REPLY_USER: string;
   BOT_NOAUTH_KICK: string;
   BOT_NOAUTH: string;
   BOT_BLOCK: string;
@@ -72,4 +79,19 @@ export interface ProcessedMessage {
   text?: string;
   command?: string;
   args?: string[];
+}
+
+export interface PendingSubmission {
+  userId: number;
+  messageId: number;
+  content: string;
+  timestamp: number;
+  originalMessage: TelegramMessage;
+}
+
+export interface UserState {
+  userId: number;
+  state: 'normal' | 'pending_submission' | 'adding_comment';
+  data?: any;
+  timestamp: number;
 } 
