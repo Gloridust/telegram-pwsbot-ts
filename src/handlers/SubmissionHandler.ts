@@ -1,21 +1,18 @@
 import type { Message } from 'node-telegram-bot-api';
 import { MessageHandler } from './MessageHandler';
 import { bot, callbackVars } from '../core/bot';
-import { configManager } from '../core/config';
-import { Helper } from '../utils/Helper';
-import { SubmissionModel } from '../models/Submission';
 import { BlackListModel } from '../models/BlackList';
 import { UserStateManager } from '../utils/UserStateManager';
 import { PendingSubmission } from '../types';
+import { ErrorHandler, ErrorType } from '../utils/ErrorHandler';
+import { Validator } from '../utils/Validator';
 
 export class SubmissionHandler extends MessageHandler {
-  private submissionModel: SubmissionModel;
   private blackListModel: BlackListModel;
   private userStateManager: UserStateManager;
 
   constructor() {
     super();
-    this.submissionModel = new SubmissionModel();
     this.blackListModel = new BlackListModel();
     this.userStateManager = new UserStateManager();
   }
@@ -58,11 +55,37 @@ export class SubmissionHandler extends MessageHandler {
         return;
       }
 
+      // 提取并验证内容
+      const content = this.extractContent(message);
+      
+      // 验证文本内容
+      if (message.text || message.caption) {
+        const textToValidate = message.text || message.caption || '';
+        const validation = Validator.validateSubmissionText(textToValidate);
+        
+        if (!validation.valid) {
+          await bot.sendMessage(chat.id, `❌ ${validation.error}`);
+          return;
+        }
+      }
+
+      // 验证媒体文件大小
+      if (message.photo || message.video || message.document) {
+        const fileSize = this.getFileSize(message);
+        if (fileSize) {
+          const sizeValidation = Validator.validateFileSize(fileSize);
+          if (!sizeValidation.valid) {
+            await bot.sendMessage(chat.id, `❌ ${sizeValidation.error}`);
+            return;
+          }
+        }
+      }
+
       // 创建待确认的投稿
       const pendingSubmission: PendingSubmission = {
         userId: user.id,
         messageId: message.message_id,
-        content: this.extractContent(message),
+        content: Validator.sanitizeInput(content),
         timestamp: Date.now(),
         originalMessage: message
       };
@@ -100,7 +123,12 @@ ${pendingSubmission.content}
 
     } catch (error) {
       console.error('处理投稿时出错:', error);
-      await bot.sendMessage(chat.id, '❌ 处理投稿时发生错误，请稍后重试。');
+      await ErrorHandler.handle(error, {
+        userId: user.id,
+        chatId: chat.id,
+        action: 'submission_process',
+        type: ErrorType.UNKNOWN
+      });
     }
   }
 
@@ -138,51 +166,33 @@ ${pendingSubmission.content}
     return '[多媒体内容]';
   }
 
-  private extractMediaGroup(_message: Message): string[] | undefined {
-    // 这里可以实现媒体组处理逻辑
-    // 暂时返回 undefined
+
+
+  private getFileSize(message: Message): number | undefined {
+    if (message.photo && message.photo.length > 0) {
+      // 获取最大尺寸的图片
+      const largestPhoto = message.photo[message.photo.length - 1];
+      return largestPhoto?.file_size;
+    }
+    
+    if (message.video) {
+      return message.video.file_size;
+    }
+    
+    if (message.document) {
+      return message.document.file_size;
+    }
+    
+    if (message.audio) {
+      return message.audio.file_size;
+    }
+    
+    if (message.voice) {
+      return message.voice.file_size;
+    }
+    
     return undefined;
   }
 
-  private async forwardToReviewGroup(message: Message, submission: any): Promise<void> {
-    const groupId = configManager.group;
-    if (!groupId) {
-      console.warn('未设置审稿群，无法转发投稿');
-      return;
-    }
 
-    try {
-      // 检查是否是夜间静音时间
-      const isNightMode = Helper.isNightMode();
-      const timeInfo = isNightMode ? '🌙 夜间投稿' : '📝 新投稿';
-
-      // 创建审稿信息
-      const reviewText = `
-${timeInfo}
-
-👤 用户: ${submission.userName}
-🆔 用户ID: ${submission.userId}
-📝 投稿ID: ${submission.id}
-📅 时间: ${Helper.formatTimestamp(submission.timestamp)}
-
-内容: ${submission.content}
-
-━━━━━━━━━━━━━━━━━━━
-💡 回复此消息使用以下命令：
-/ok [评论] - 通过投稿
-/no <理由> - 拒绝投稿
-/re <内容> - 与用户对话
-/ban [理由] - 拉黑用户
-      `.trim();
-
-      // 首先发送审稿信息
-      await bot.sendMessage(groupId, reviewText);
-
-      // 然后转发原始消息
-      await bot.forwardMessage(groupId, message.chat.id, message.message_id);
-
-    } catch (error) {
-      console.error('转发到审稿群失败:', error);
-    }
-  }
 } 

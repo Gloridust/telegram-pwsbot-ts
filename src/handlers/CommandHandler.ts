@@ -4,13 +4,16 @@ import { bot } from '../core/bot';
 import { configManager } from '../core/config';
 import { Helper } from '../utils/Helper';
 import { SubmissionModel } from '../models/Submission';
+import { Statistics } from '../utils/Statistics';
 
 export class CommandHandler extends MessageHandler {
   private submissionModel: SubmissionModel;
+  private statistics: Statistics;
 
   constructor() {
     super();
     this.submissionModel = new SubmissionModel();
+    this.statistics = new Statistics();
   }
 
   public async process(message: Message): Promise<void> {
@@ -91,6 +94,18 @@ export class CommandHandler extends MessageHandler {
             await this.handleHelp(message);
           }
           break;
+
+        case 'stats':
+          if (Helper.isAdmin(user.id)) {
+            await this.handleStats(message);
+          }
+          break;
+
+        case 'mystats':
+          if (isPrivate) {
+            await this.handleMyStats(message);
+          }
+          break;
       }
     } catch (error) {
       console.error('处理命令时出错:', error);
@@ -159,7 +174,7 @@ export class CommandHandler extends MessageHandler {
         return;
       }
 
-      const submissionId = submissionIdMatch[1];
+      const submissionId = submissionIdMatch[1]!;
       
       // 从数据库获取投稿信息
       const submission = await this.submissionModel.getSubmission(submissionId);
@@ -200,7 +215,7 @@ export class CommandHandler extends MessageHandler {
       }
 
       // 更新投稿状态
-      await this.submissionModel.updateSubmissionStatus(submissionId, 'approved', comment);
+      await this.submissionModel.updateSubmissionStatus(submissionId!, 'approved', comment);
 
       // 通知审稿群
       await bot.sendMessage(message.chat.id, `✅ 稿件已通过并发送到频道${comment ? `\n评论: ${comment}` : ''}`);
@@ -243,7 +258,7 @@ export class CommandHandler extends MessageHandler {
         return;
       }
 
-      const submissionId = submissionIdMatch[1];
+      const submissionId = submissionIdMatch[1]!;
       
       // 从数据库获取投稿信息
       const submission = await this.submissionModel.getSubmission(submissionId);
@@ -258,7 +273,7 @@ export class CommandHandler extends MessageHandler {
       }
 
       // 更新投稿状态
-      await this.submissionModel.updateSubmissionStatus(submissionId, 'rejected', undefined, reason);
+      await this.submissionModel.updateSubmissionStatus(submissionId!, 'rejected', undefined, reason);
 
       // 通知审稿群
       await bot.sendMessage(message.chat.id, `❌ 稿件已拒绝\n理由: ${reason}`);
@@ -338,5 +353,26 @@ export class CommandHandler extends MessageHandler {
   private isInReviewGroup(chatId: number): boolean {
     const groupId = configManager.group;
     return groupId !== undefined && chatId.toString() === groupId;
+  }
+
+  private async handleStats(message: Message): Promise<void> {
+    try {
+      const report = await this.statistics.generateStatsReport();
+      await bot.sendMessage(message.chat.id, report);
+    } catch (error) {
+      console.error('生成统计报告失败:', error);
+      await bot.sendMessage(message.chat.id, '❌ 生成统计报告失败');
+    }
+  }
+
+  private async handleMyStats(message: Message): Promise<void> {
+    try {
+      const userId = message.from!.id;
+      const stats = await this.statistics.getUserStats(userId);
+      await bot.sendMessage(message.chat.id, stats);
+    } catch (error) {
+      console.error('获取用户统计失败:', error);
+      await bot.sendMessage(message.chat.id, '❌ 获取统计数据失败');
+    }
   }
 } 

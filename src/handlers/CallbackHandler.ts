@@ -25,10 +25,8 @@ export class CallbackHandler {
 
       const callbackData = query.data;
       const userId = query.from.id;
-      const messageId = query.message.message_id;
-      const chatId = query.message.chat.id;
 
-      console.log('处理回调查询:', { callbackData, userId, chatId });
+      console.log('处理回调查询:', { callbackData, userId });
 
       // 提取操作类型和数据
       const [action, submissionId] = callbackData.split(':');
@@ -322,11 +320,13 @@ export class CallbackHandler {
   }
 
   private async handleRejectSubmission(query: CallbackQuery): Promise<void> {
-    const userId = query.from!.id;
     const messageText = query.message!.text || query.message!.caption || '';
-    const submissionIdMatch = messageText.match(/📝 投稿ID: ([^\s\n]+)/);
+    console.log('🔍 拒绝投稿 - 消息文本:', messageText);
     
-    if (!submissionIdMatch) {
+    const submissionIdMatch = messageText.match(/📝 投稿ID: ([^\s\n]+)/);
+    console.log('🔍 拒绝投稿 - 匹配结果:', submissionIdMatch);
+    
+    if (!submissionIdMatch || !submissionIdMatch[1]) {
       await bot.answerCallbackQuery(query.id, {
         text: '无法找到投稿ID',
         show_alert: true
@@ -335,24 +335,55 @@ export class CallbackHandler {
     }
 
     const submissionId = submissionIdMatch[1];
-
-    // 设置用户状态为添加拒绝理由
-    await this.userStateManager.setUserState(userId, 'adding_comment', {
-      submissionId,
-      originalMessageId: query.message!.message_id,
-      chatId: query.message!.chat.id,
-      action: 'reject'
-    });
-
-    await bot.editMessageText(messageText + '\n\n❌ 请发送拒绝理由：', {
-      chat_id: query.message!.chat.id,
-      message_id: query.message!.message_id,
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '❌ 取消', callback_data: 'cancel:comment' }]
-        ]
+    console.log('📝 拒绝投稿 - 投稿ID:', submissionId);
+    
+    try {
+      // 获取投稿信息
+      const submission = await this.submissionModel.getSubmission(submissionId);
+      console.log('📊 拒绝投稿 - 投稿信息:', submission);
+      
+      if (!submission || submission.status !== 'pending') {
+        console.error('❌ 投稿状态异常:', { 
+          found: !!submission, 
+          status: submission?.status,
+          expectedStatus: 'pending'
+        });
+        await bot.answerCallbackQuery(query.id, {
+          text: '投稿状态异常，无法处理',
+          show_alert: true
+        });
+        return;
       }
-    });
+
+      // 更新投稿状态
+      await this.submissionModel.updateSubmissionStatus(submissionId, 'rejected', undefined, '');
+
+      // 更新审稿群消息
+      await bot.editMessageText(messageText + '\n\n❌ 已拒绝投稿', {
+        chat_id: query.message!.chat.id,
+        message_id: query.message!.message_id
+      });
+
+      // 通知用户
+      try {
+        const userNotification = `❌ 很抱歉，您的投稿未通过审核\n\n📝 投稿ID: ${submissionId}`;
+        await bot.sendMessage(submission.userId.toString(), userNotification);
+      } catch (userError) {
+        console.error('通知用户失败:', userError);
+      }
+      
+      await bot.answerCallbackQuery(query.id, {
+        text: '投稿已拒绝',
+        show_alert: false
+      });
+      
+    } catch (error) {
+      console.error('拒绝投稿失败:', error);
+      await bot.answerCallbackQuery(query.id, {
+        text: '拒绝操作失败',
+        show_alert: true
+      });
+    }
   }
 
   private async handleBanUser(query: CallbackQuery): Promise<void> {
@@ -579,10 +610,7 @@ export class CallbackHandler {
       targetUserId 
     });
 
-    if (action === 'reject') {
-      // 处理拒绝理由
-      await this.processRejection(submissionId, comment, chatId, originalMessageId);
-    } else if (action === 'reply') {
+    if (action === 'reply') {
       // 处理回复用户
       console.log('➡️ 调用 processReplyToUser:', { targetUserId, comment });
       await this.processReplyToUser(targetUserId, comment, submissionId, chatId, originalMessageId);
@@ -648,30 +676,7 @@ export class CallbackHandler {
     }
   }
 
-  private async processRejection(submissionId: string, reason: string, chatId: number, messageId: number): Promise<void> {
-    const submission = await this.submissionModel.getSubmission(submissionId);
-    
-    if (!submission || submission.status !== 'pending') {
-      await bot.sendMessage(chatId, '❌ 投稿状态异常，无法处理');
-      return;
-    }
 
-    await this.submissionModel.updateSubmissionStatus(submissionId, 'rejected', undefined, reason);
-
-    const originalText = (await bot.getChat(chatId)).description || '';
-    await bot.editMessageText(originalText + `\n\n❌ 已拒绝投稿\n📋 拒绝理由: ${reason}`, {
-      chat_id: chatId,
-      message_id: messageId
-    });
-
-    // 通知用户
-    try {
-      const userNotification = `❌ 很抱歉，您的投稿未通过审核\n\n📝 投稿ID: ${submissionId}\n📋 拒绝理由: ${reason}\n\n您可以根据反馈意见修改后重新投稿。`;
-      await bot.sendMessage(submission.userId.toString(), userNotification);
-    } catch (error) {
-      console.error('通知用户失败:', error);
-    }
-  }
 
   private async processReplyToUser(targetUserId: number, replyContent: string, submissionId: string, chatId: number, messageId: number): Promise<void> {
     console.log('🔄 processReplyToUser 开始:', { targetUserId, replyContent, submissionId, chatId, messageId });
@@ -688,9 +693,8 @@ ${replyContent}
       const sendResult = await bot.sendMessage(targetUserId.toString(), userMessage);
       console.log('✅ 消息发送成功:', { messageId: sendResult.message_id });
 
-      // 获取原始消息并更新审稿群消息
+      // 更新审稿群消息
       try {
-        const originalMessage = await bot.getChat(chatId);
         // 由于无法直接获取消息内容，我们重新构建消息文本
         const reviewText = `💬 已回复用户: ${replyContent}
 

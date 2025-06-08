@@ -10,6 +10,9 @@ export class Database<T = any> {
   private db: Low<DatabaseSchema>;
   private tableName: string;
   private initialized = false;
+  private writeQueue: Promise<void> = Promise.resolve();
+  private cacheTimeout: NodeJS.Timeout | null = null;
+  private readonly CACHE_DURATION = 60000; // 1分钟缓存
 
   constructor(tableName: string, filename = 'db.json') {
     this.tableName = tableName;
@@ -26,28 +29,50 @@ export class Database<T = any> {
       }
       await this.db.write();
       this.initialized = true;
+      this.scheduleDataRefresh();
     }
+  }
+
+  private scheduleDataRefresh(): void {
+    if (this.cacheTimeout) {
+      clearTimeout(this.cacheTimeout);
+    }
+    
+    this.cacheTimeout = setTimeout(() => {
+      this.initialized = false;
+    }, this.CACHE_DURATION);
   }
 
   public async add(id: string, data: T): Promise<void> {
     await this.ensureInitialized();
-    const item: DatabaseItem = {
-      id,
-      data,
-      timestamp: Date.now()
-    };
     
-    const table = this.db.data![this.tableName] || [];
-    const existingIndex = table.findIndex(item => item.id === id);
+    // 使用队列确保写入操作的原子性
+    this.writeQueue = this.writeQueue.then(async () => {
+      const item: DatabaseItem = {
+        id,
+        data,
+        timestamp: Date.now()
+      };
+      
+      // 重新读取数据以获取最新状态
+      await this.db.read();
+      
+      const table = this.db.data![this.tableName] || [];
+      const existingIndex = table.findIndex(item => item.id === id);
+      
+      if (existingIndex >= 0) {
+        table[existingIndex] = item;
+      } else {
+        table.push(item);
+      }
+      
+      this.db.data![this.tableName] = table;
+      await this.db.write();
+      
+      this.scheduleDataRefresh();
+    });
     
-    if (existingIndex >= 0) {
-      table[existingIndex] = item;
-    } else {
-      table.push(item);
-    }
-    
-    this.db.data![this.tableName] = table;
-    await this.db.write();
+    await this.writeQueue;
   }
 
   public async get(id: string): Promise<T | null> {
